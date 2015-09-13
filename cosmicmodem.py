@@ -30,11 +30,11 @@ def encode(string):
 def getWaveFile(string, duration=0.1):
     file = BytesIO()
     f = wave.open(file, 'w')
-    f.setparams((1, 2, 4000, len(string)*4*4000*duration, "NONE", "Uncompressed"))
+    f.setparams((1, 2, 8000, len(string)*4*8000*duration, "NONE", "Uncompressed"))
     return f, file
 
 def appendFrequency(freq, f, duration=0.1):
-    sampleRate = 4000 # of samples per second (standard)
+    sampleRate = 8000 # of samples per second (standard)
     numChan = 1 # of channels (1: mono, 2: stereo)
     dataSize = 2 # 2 bytes because of using signed short integers => bit depth = 16
     
