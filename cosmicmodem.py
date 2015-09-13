@@ -7,14 +7,15 @@ import struct
 from io import BytesIO
 import array
 import operator
+from queue import Queue
 
 DEBUG = True
 BITRATE = 8000
 FRAMES = 400
 FRAME_TIME = float(FRAMES)/BITRATE
 
-frequencies = [ 325, 375, 425, 475 ]
-freqBytes = { 325:0, 375:1, 425:2, 475:3 }
+frequencies = [ 325, 350, 375, 400, 425, 450, 475, 500 ]
+freqBytes = { 325:0, 350:1, 375:2, 400:3, 425:4, 450:5, 475:6, 500:7 }
 freqCharts = {
     # 325: {
     #     'sin': [ math.sin(i*2*math.pi*325/8000) for i in range(400) ],
@@ -88,5 +89,18 @@ def getFreqFromSignal(sig):
 
     return max(dotProducts.iteritems(), key=operator.itemgetter(1))[0]
 
+queue = Queue()
+
 def decode(bytes):
-    return freqBytes[getFreqFromSignal(bytes)]
+    print getFreqFromSignal(bytes)
+
+    almostNibble = freqBytes[getFreqFromSignal(bytes)]
+    queue.put(almostNibble & 1)
+    queue.put((almostNibble & 2) >> 1)
+    queue.put((almostNibble & 4) >> 2)
+
+    if queue.size >= 8:
+        bits = sum([queue.get() << i for i in range(8)])
+        print bits
+
+            
