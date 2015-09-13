@@ -9,7 +9,7 @@ import array
 import operator
 from Queue import Queue
 
-DEBUG = False
+DEBUG = True
 BITRATE = 8000
 FRAMES = 400
 FRAME_TIME = float(FRAMES)/BITRATE
@@ -94,30 +94,29 @@ def getFreqFromSignal(sig):
             dotProductCos += freqCharts[freq]['cos'][i]*(sig[i]/256.0-0.5)
         dotProducts[freq] = (dotProductSin*dotProductSin + dotProductCos*dotProductCos)/1e4
 
-    if (DEBUG):
-        for key, val in dotProducts.iteritems():
+    maxVal = -1;
+    for key, val in dotProducts.iteritems():
+        if DEBUG: print key, val
+        if val > maxVal: maxVal = val
 
-            #print key, val
-            pass
-
-            lastNibble = [message.item(i,0) for i in range(4)]
+    if maxVal < 0.3: return None
     return max(dotProducts.iteritems(), key=operator.itemgetter(1))[0]
 
 pairQueue = Queue()
-
-def testgetFreqFromSignal(index):
-    return [325, 400, 350, 400][index]
-                    # 325
 
 onDecodedDataListener = None
 lastNibble = []
 
 def registerOnDecodedDataListener(func):
+    global onDecodedDataListener
     onDecodedDataListener = func
 
 def decode(bytes):
     global lastNibble
-    matchingFreq = testgetFreqFromSignal(bytes)
+    matchingFreq = getFreqFromSignal(bytes)
+    if matchingFreq is None:
+        return None
+    print "HANDLING DATA"
 
     pair = freqBytes[matchingFreq]
     pairQueue.put(pair)
@@ -136,11 +135,11 @@ def decode(bytes):
             arr.itemset(errCol-1, 0, 1-arr.item(errCol-1,0))
         message = mat_r*arr
 
-        if lastNibble == None:
+        if len(lastNibble) == 0:
             lastNibble = [message.item(i,0) for i in range(4)]
         else:
             byteArr = []
             byteArr.extend(lastNibble)
             byteArr.extend([message.item(i,0) for i in range(4)])
             lastNibble = []
-            #print byteArr
+            onDecodedDataListener(sum([int(byteArr[i]) << i for i in range(8)]))
