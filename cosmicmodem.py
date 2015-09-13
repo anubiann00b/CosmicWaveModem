@@ -53,7 +53,7 @@ def encode(string):
     return file
 
 def sendByte(val, f):
-    print 'send ', val
+    #print 'send ', val
     for freqIndex in [(val >> i*2) & 3 for i in reversed(range(4))]:
         appendFrequency(frequencies[freqIndex], f)
 
@@ -64,7 +64,7 @@ def getWaveFile(string, duration=FRAME_TIME):
     return f, file
 
 def appendFrequency(freq, f, duration=FRAME_TIME):
-    print 'freq ', freq
+    #print 'freq ', freq
     sampleRate = BITRATE # of samples per second (standard)
     numChan = 1 # of channels (1: mono, 2: stereo)
     dataSize = 2 # 2 bytes because of using signed short integers => bit depth = 16
@@ -78,7 +78,6 @@ def appendFrequency(freq, f, duration=FRAME_TIME):
 
     f.writeframes(data.tostring())
 
-# encode("ayla mao")
 
 def parabolic(f, x):
     xv = 1/2. * (f[x-1] - f[x+1]) / (f[x-1] - 2 * f[x] + f[x+1]) + x
@@ -97,7 +96,9 @@ def getFreqFromSignal(sig):
 
     if (DEBUG):
         for key, val in dotProducts.iteritems():
-            print key, val
+
+            #print key, val
+            pass
 
             lastNibble = [message.item(i,0) for i in range(4)]
     return max(dotProducts.iteritems(), key=operator.itemgetter(1))[0]
@@ -111,6 +112,7 @@ def testgetFreqFromSignal(index):
 lastNibble = []
 
 def decode(bytes):
+    global lastNibble
     matchingFreq = testgetFreqFromSignal(bytes)
 
     pair = freqBytes[matchingFreq]
@@ -137,9 +139,9 @@ def decode(bytes):
             byteArr.extend(lastNibble)
             byteArr.extend([message.item(i,0) for i in range(4)])
             lastNibble = []
-            print byteArr
+            #print byteArr
 
-decode(0)
-decode(1)
-decode(2)
-decode(3)
+#decode(0)
+#decode(1)
+#decode(2)
+#decode(3)
