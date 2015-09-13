@@ -109,7 +109,11 @@ def testgetFreqFromSignal(index):
     return [325, 400, 350, 400][index]
                     # 325
 
+onDecodedDataListener = None
 lastNibble = []
+
+def registerOnDecodedDataListener(func):
+    onDecodedDataListener = func
 
 def decode(bytes):
     global lastNibble
@@ -140,8 +144,3 @@ def decode(bytes):
             byteArr.extend([message.item(i,0) for i in range(4)])
             lastNibble = []
             #print byteArr
-
-#decode(0)
-#decode(1)
-#decode(2)
-#decode(3)
