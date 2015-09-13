@@ -7,12 +7,16 @@ import struct
 from io import BytesIO
 import array
 import operator
-from queue import Queue
+from Queue import Queue
 
 DEBUG = True
 BITRATE = 8000
 FRAMES = 400
 FRAME_TIME = float(FRAMES)/BITRATE
+
+mat_g = np.matrix('1 1 0 1; 1 0 1 1; 1 0 0 0; 0 1 1 1; 0 1 0 0; 0 1 0 0; 0 0 0 1')
+mat_h = np.matrix('1 0 1 0 1 0 1; 0 1 1 0 0 1 1; 0 0 0 1 1 1 1')
+mat_r = np.matrix('0 0 1 0 0 0 0; 0 0 0 0 1 0 0; 0 0 0 0 0 1 0; 0 0 0 0 0 0 1')
 
 frequencies = [ 325, 350, 375, 400, 425, 450, 475, 500 ]
 freqBytes = { 325:0, 350:1, 375:2, 400:3, 425:4, 450:5, 475:6, 500:7 }
@@ -35,18 +39,22 @@ for freq in frequencies:
 def getFreqs(string):
     for char in string:
         c = ord(char)
-        for i in range(4):
-            yield (c >> i*2) & 3
+        for i in range(2):
+            yield (c >> 4*i) & 15
 
 def encode(string):
     f,file = getWaveFile(string)
 
     for freqIndex in getFreqs(string):
-        print freqIndex
-        appendFrequency(frequencies[freqIndex], f)
+        res = (mat_g*np.matrix([ [(11>>i)&1] for i in reversed(range(4)) ]))%2
+        sendByte(sum([res.item(i,0)<<6-i for i in reversed(range(7))]))
     f.close()
 
     return file
+
+def sendByte(val):
+    for freqIndex in [(val >> i*2) & 3 for i in reversed(range(4))]:
+        appendFrequency(frequencies[freqIndex], f)
 
 def getWaveFile(string, duration=FRAME_TIME):
     file = BytesIO()
@@ -67,6 +75,8 @@ def appendFrequency(freq, f, duration=FRAME_TIME):
         data.append(int(sample))
 
     f.writeframes(data.tostring())
+
+# encode("ayla mao")
 
 def parabolic(f, x):
     xv = 1/2. * (f[x-1] - f[x+1]) / (f[x-1] - 2 * f[x] + f[x+1]) + x
@@ -91,16 +101,36 @@ def getFreqFromSignal(sig):
 
 queue = Queue()
 
+def testgetFreqFromSignal(index):
+    return [325, 400, 350, 400][index]
+    #                 325
+
 def decode(bytes):
-    print getFreqFromSignal(bytes)
+    matchingFreq = testgetFreqFromSignal(bytes)
 
-    almostNibble = freqBytes[getFreqFromSignal(bytes)]
-    queue.put(almostNibble & 1)
-    queue.put((almostNibble & 2) >> 1)
-    queue.put((almostNibble & 4) >> 2)
+    pair = freqBytes[matchingFreq]
+    queue.put(pair)
 
-    if queue.size >= 8:
-        bits = sum([queue.get() << i for i in range(8)])
-        print bits
+    if queue.qsize() >= 4:
+        arr = np.zeros(shape=(7,1))
+        for i in range(4):
+            val = queue.get()
+            if i != 0:
+                arr.itemset(i*2-1, 0, (val & 2) >> 1)
+            arr.itemset(i*2, 0, val & 1)
 
-            
+        print arr
+        error = (mat_h*arr)%2
+        print error
+        errCol = sum([int(error.item(i,0)) << i for i in range(3)])
+        print errCol
+        if errCol != 0:
+            arr.itemset(errCol-1, 0, 1-arr.item(errCol-1,0))
+        print arr
+        message = mat_r*arr
+        print message
+
+decode(0)
+decode(1)
+decode(2)
+decode(3)
