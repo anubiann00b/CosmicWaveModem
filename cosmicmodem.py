@@ -9,7 +9,7 @@ import array
 import operator
 from Queue import Queue
 
-DEBUG = True
+DEBUG = False
 BITRATE = 8000
 FRAMES = 400
 FRAME_TIME = float(FRAMES)/BITRATE
@@ -46,13 +46,14 @@ def encode(string):
     f,file = getWaveFile(string)
 
     for freqIndex in getFreqs(string):
-        res = (mat_g*np.matrix([ [(11>>i)&1] for i in reversed(range(4)) ]))%2
-        sendByte(sum([res.item(i,0)<<6-i for i in reversed(range(7))]))
+        res = (mat_g*np.matrix([ [(freqIndex>>i)&1] for i in reversed(range(4)) ]))%2
+        sendByte(sum([res.item(i,0)<<6-i for i in reversed(range(7))]), f)
     f.close()
 
     return file
 
-def sendByte(val):
+def sendByte(val, f):
+    print 'send ', val
     for freqIndex in [(val >> i*2) & 3 for i in reversed(range(4))]:
         appendFrequency(frequencies[freqIndex], f)
 
@@ -63,6 +64,7 @@ def getWaveFile(string, duration=FRAME_TIME):
     return f, file
 
 def appendFrequency(freq, f, duration=FRAME_TIME):
+    print 'freq ', freq
     sampleRate = BITRATE # of samples per second (standard)
     numChan = 1 # of channels (1: mono, 2: stereo)
     dataSize = 2 # 2 bytes because of using signed short integers => bit depth = 16
@@ -97,38 +99,45 @@ def getFreqFromSignal(sig):
         for key, val in dotProducts.iteritems():
             print key, val
 
+            lastNibble = [message.item(i,0) for i in range(4)]
     return max(dotProducts.iteritems(), key=operator.itemgetter(1))[0]
 
-queue = Queue()
+pairQueue = Queue()
 
 def testgetFreqFromSignal(index):
     return [325, 400, 350, 400][index]
-    #                 325
+                    # 325
+
+lastNibble = []
 
 def decode(bytes):
     matchingFreq = testgetFreqFromSignal(bytes)
 
     pair = freqBytes[matchingFreq]
-    queue.put(pair)
+    pairQueue.put(pair)
 
-    if queue.qsize() >= 4:
+    if pairQueue.qsize() >= 4:
         arr = np.zeros(shape=(7,1))
         for i in range(4):
-            val = queue.get()
+            val = pairQueue.get()
             if i != 0:
                 arr.itemset(i*2-1, 0, (val & 2) >> 1)
             arr.itemset(i*2, 0, val & 1)
 
-        print arr
         error = (mat_h*arr)%2
-        print error
         errCol = sum([int(error.item(i,0)) << i for i in range(3)])
-        print errCol
         if errCol != 0:
             arr.itemset(errCol-1, 0, 1-arr.item(errCol-1,0))
-        print arr
         message = mat_r*arr
-        print message
+
+        if lastNibble == None:
+            lastNibble = [message.item(i,0) for i in range(4)]
+        else:
+            byteArr = []
+            byteArr.extend(lastNibble)
+            byteArr.extend([message.item(i,0) for i in range(4)])
+            lastNibble = []
+            print byteArr
 
 decode(0)
 decode(1)
