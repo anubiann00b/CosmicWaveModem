@@ -7,9 +7,9 @@ import struct
 from io import BytesIO
 import array
 
-DEBUG_DECODE = False
+DEBUG_DECODE = True
 
-frequencies = [ 350, 375, 400, 425 ]
+frequencies = [ 325, 375, 425, 475 ]
 
 def getFreqs(string):
     for char in string:
@@ -56,47 +56,38 @@ def freq_from_autocorr(sig):
     if DEBUG_DECODE: print
     # Calculate autocorrelation (same thing as convolution, but with 
     # one input reversed in time), and throw away the negative lags
-    corr = fftconvolve(sig, sig[::-1], mode='full')
-    corr = corr[len(corr)/2:]
+    corrs = fftconvolve(sig, sig[::-1], mode='full')
+    corrs = corrs[len(corrs)/2:]
 
-    if DEBUG_DECODE: print corr.tolist()
-    
-    # Find the first low point
-    d = np.diff(corr)
+    print corrs
 
-    if DEBUG_DECODE: print d.tolist()
+    freqCorrs = {}
+    for i, freq in enumerate(frequencies):
+        lastCorrFreq = 0
+        for iCorr, corrScore in enumerate(corrs): # descending
+            px, py = parabolic(corrs, iCorr)
+            corrFreq = 2*8000/px;
+            if corrFreq < freq:
+                print lastCorrFreq, corrs[iCorr-1]/1e6
+                print corrFreq, corrScore/1e6
+                # if freq-corrFreq > lastCorrFreq-freq:
+                    # freqCorrs[freq] = corrScore/1e6
+                # else:
+                    # freqCorrs[freq] = corrs[iCorr-1]/1e6
+                freqCorrs[freq] = (corrScore/1e6 + corrs[iCorr-1]/1e6)/2
+                break
+            lastCorrFreq = corrFreq
 
-    start = find(d > 0)[0]
+    print freqCorrs
 
-    start = 3
+    mostCorrFreq = -1
+    mostCorr = -1
+    for freq, corr in freqCorrs.items():
+        if corr > mostCorr:
+            mostCorr = corr
+            mostCorrFreq = freq
+    return mostCorrFreq
 
-    if DEBUG_DECODE: print 'strt: ' + str(start)
-
-    # Find the next peak after the low point (other than 0 lag).  This bit is 
-    # not reliable for long signals, due to the desired peak occurring between 
-    # samples, and other peaks appearing higher.
-    # Should use a weighting function to de-emphasize the peaks at longer lags.
-
-    smoothCorr = np.copy(corr)
-    for i in range(corr.size):
-        if i<2 or i>corr.size-3: continue
-        smoothCorr[i] = (corr[i-2] + corr[i-1] + corr[i] + corr[i+1] + corr[i+2])/5
-
-    if DEBUG_DECODE:
-        for i in range(400):
-            print 'corr: ' + str(smoothCorr[i]/1000000)
-            print 'peak: ' + str(i)
-            px, py = parabolic(corr, i)
-            print '  px:' + str(2*8000/px)
-            print
-
-    peak = np.argmax(smoothCorr[start:]) + start
-
-    if DEBUG_DECODE: print 'peak: ' + str(peak)
-
-    px, py = parabolic(corr, peak)
-    
-    return px
-
-def decode(bytes, bitrate, period):
-    return 2*bitrate/freq_from_autocorr(bytes)
+def decode(bytes):
+    print
+    return freq_from_autocorr(bytes)
