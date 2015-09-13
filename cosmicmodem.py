@@ -6,10 +6,30 @@ import math
 import struct
 from io import BytesIO
 import array
+import operator
 
-DEBUG_DECODE = True
+DEBUG = True
+BITRATE = 8000
+FRAMES = 400
+FRAME_TIME = float(FRAMES)/BITRATE
 
 frequencies = [ 325, 375, 425, 475 ]
+freqBytes = { 325:0, 375:1, 425:2, 475:3 }
+freqCharts = {
+    # 325: {
+    #     'sin': [ math.sin(i*2*math.pi*325/8000) for i in range(400) ],
+    #     'cos': [ math.sin(i*2*math.pi*325/8000) for i in range(400) ]
+    # },
+}
+
+def getFunctionsFromFreq(f):
+    return {
+        'sin': [ math.sin(i*2*math.pi*f/BITRATE) for i in range(FRAMES) ],
+        'cos': [ math.sin(i*2*math.pi*f/BITRATE) for i in range(FRAMES) ]
+    }
+
+for freq in frequencies:
+    freqCharts[freq] = getFunctionsFromFreq(freq)
 
 def getFreqs(string):
     for char in string:
@@ -27,14 +47,14 @@ def encode(string):
 
     return file
 
-def getWaveFile(string, duration=0.1):
+def getWaveFile(string, duration=FRAME_TIME):
     file = BytesIO()
     f = wave.open(file, 'w')
-    f.setparams((1, 2, 8000, len(string)*4*8000*duration, "NONE", "Uncompressed"))
+    f.setparams((1, 2, BITRATE, len(string)*4*BITRATE*duration, "NONE", "Uncompressed"))
     return f, file
 
-def appendFrequency(freq, f, duration=0.1):
-    sampleRate = 8000 # of samples per second (standard)
+def appendFrequency(freq, f, duration=FRAME_TIME):
+    sampleRate = BITRATE # of samples per second (standard)
     numChan = 1 # of channels (1: mono, 2: stereo)
     dataSize = 2 # 2 bytes because of using signed short integers => bit depth = 16
     
@@ -52,42 +72,21 @@ def parabolic(f, x):
     yv = f[x] - 1/4. * (f[x-1] - f[x+1]) * (xv - x)
     return (xv, yv)
 
-def freq_from_autocorr(sig):
-    if DEBUG_DECODE: print
-    # Calculate autocorrelation (same thing as convolution, but with 
-    # one input reversed in time), and throw away the negative lags
-    corrs = fftconvolve(sig, sig[::-1], mode='full')
-    corrs = corrs[len(corrs)/2:]
+def getFreqFromSignal(sig):
+    dotProducts = {}
+    for freq in frequencies:
+        dotProductSin = 0
+        dotProductCos = 0
+        for i in range(FRAMES):
+            dotProductSin += freqCharts[freq]['sin'][i]*(sig[i]/256.0-0.5)
+            dotProductCos += freqCharts[freq]['cos'][i]*(sig[i]/256.0-0.5)
+        dotProducts[freq] = (dotProductSin*dotProductSin + dotProductCos*dotProductCos)/1e4
 
-    print corrs
+    if (DEBUG):
+        for key, val in dotProducts.iteritems():
+            print key, val
 
-    freqCorrs = {}
-    for i, freq in enumerate(frequencies):
-        lastCorrFreq = 0
-        for iCorr, corrScore in enumerate(corrs): # descending
-            px, py = parabolic(corrs, iCorr)
-            corrFreq = 2*8000/px;
-            if corrFreq < freq:
-                print lastCorrFreq, corrs[iCorr-1]/1e6
-                print corrFreq, corrScore/1e6
-                # if freq-corrFreq > lastCorrFreq-freq:
-                    # freqCorrs[freq] = corrScore/1e6
-                # else:
-                    # freqCorrs[freq] = corrs[iCorr-1]/1e6
-                freqCorrs[freq] = (corrScore/1e6 + corrs[iCorr-1]/1e6)/2
-                break
-            lastCorrFreq = corrFreq
-
-    print freqCorrs
-
-    mostCorrFreq = -1
-    mostCorr = -1
-    for freq, corr in freqCorrs.items():
-        if corr > mostCorr:
-            mostCorr = corr
-            mostCorrFreq = freq
-    return mostCorrFreq
+    return max(dotProducts.iteritems(), key=operator.itemgetter(1))[0]
 
 def decode(bytes):
-    print
-    return freq_from_autocorr(bytes)
+    return freqBytes[getFreqFromSignal(bytes)]
